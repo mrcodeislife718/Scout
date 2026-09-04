@@ -6,7 +6,7 @@ Scout is the ecosystem's human-friendly, JSON-compatible structured-data format.
 
 Scout keeps JSON's familiar object/array/string/number/boolean/null value model while making configuration and machine-readable documents easier for humans and tools to maintain.
 
-The intended format includes native `//` and `/* ... */` comments and trailing commas while preserving deterministic JSON-compatible semantic values. Comments/trivia may be retained by lossless tooling but do not silently become application data. Parsing Scout never executes code.
+The format includes native `//` and `/* ... */` comments and trailing commas while preserving deterministic JSON-compatible semantic values. Comments/trivia may be retained by lossless tooling but do not silently become application data. Parsing Scout never executes code.
 
 ## Relationships
 
@@ -18,6 +18,8 @@ Potential first-party uses include Cannon/Velocity project configuration, Chrono
 
 Scout must not turn into a scripting language, template engine, environment-variable runtime or dumping ground for unrelated syntax. Interoperability with ordinary JSON is a core property.
 
-## Branch-preservation note
+## Branch reconciliation
 
-The `agent/scout-universal-interop` branch contains the explicit comments + trailing-commas product definition plus parser/tokenizer/language-service work and dedicated trailing-comma tests. Preserve and semantically reconcile that work into canonical main before any branch cleanup.
+The important product semantics from `agent/scout-universal-interop` are now represented in canonical `main`: trailing-comma parser behavior, dedicated regression coverage, canonical README documentation, and the Scout 0.5 specification all describe comments + trailing commas as first-class Scout syntax.
+
+The historical branch should be retained until portfolio cleanup verifies no additional unique history or evidence needs preservation, but canonical product truth now lives on `main`.
