@@ -58,10 +58,6 @@ export function validateText(source) {
   }
 }
 
-function nodeIdentity(node) {
-  return { scoutNodeId: node.id, jovaNodeId: node.id };
-}
-
 function symbolChildren(source, node) {
   if (!node || node.type === 'Recovery') return [];
   if (node.type === 'Object') {
@@ -71,7 +67,7 @@ function symbolChildren(source, node) {
       range: nodeRange(source, member),
       selectionRange: { start: offsetToLspPosition(source, member.keyStart.offset), end: offsetToLspPosition(source, member.keyEnd.offset) },
       children: symbolChildren(source, member.value),
-      ...nodeIdentity(member),
+      scoutNodeId: member.id,
     }));
   }
   if (node.type === 'Array') {
@@ -81,7 +77,7 @@ function symbolChildren(source, node) {
       range: nodeRange(source, element),
       selectionRange: nodeRange(source, element.value),
       children: symbolChildren(source, element.value),
-      ...nodeIdentity(element),
+      scoutNodeId: element.id,
     }));
   }
   return [];
@@ -130,7 +126,6 @@ function validateRecoverySnapshot(snapshot) {
 
 export function createDocumentStore() {
   const documents = new Map();
-
   return {
     open(uri, text, version = 1) {
       if (typeof uri !== 'string' || typeof text !== 'string') throw new TypeError('uri and text are required');
@@ -138,16 +133,13 @@ export function createDocumentStore() {
       documents.set(uri, { uri, version, document, lastValid: document.incomplete ? undefined : document });
       return document;
     },
-
     get(uri) { return documents.get(uri)?.document; },
     version(uri) { return documents.get(uri)?.version; },
-
     update(uri, changes, version) {
       const entry = documents.get(uri);
       if (!entry) throw new RangeError(`Scout document is not open: ${uri}`);
       if (!Array.isArray(changes)) throw new TypeError('changes must be an array');
       const applied = applyChangesToSource(entry.document.source, changes);
-
       if (!entry.document.incomplete) {
         try {
           reparseIncremental(entry.document, applied.edits);
@@ -161,42 +153,30 @@ export function createDocumentStore() {
         entry.document = tolerant;
         if (!tolerant.incomplete) entry.lastValid = structuredClone(tolerant);
       }
-
       entry.version = version ?? entry.version + 1;
       return entry.document;
     },
-
     close(uri) { return documents.delete(uri); },
-
     diagnostics(uri) {
       const entry = documents.get(uri);
       if (!entry) return [];
       if (entry.document.incomplete) return (entry.document.diagnostics ?? []).map((item) => recoveryDiagnosticToLsp(entry.document.source, item));
       return [];
     },
-
     symbols(uri) {
       const entry = documents.get(uri);
       return entry ? documentSymbols(entry.document) : [];
     },
-
     hover(uri, position) {
       const entry = documents.get(uri);
       return entry ? hoverAt(entry.document, position) : undefined;
     },
-
     snapshot() {
       return {
         schema: 'scout.document-store/v1',
-        documents: [...documents.values()].map((entry) => ({
-          uri: entry.uri,
-          version: entry.version,
-          source: entry.document.source,
-          lastValidSource: entry.lastValid?.source ?? null,
-        })).sort((a, b) => a.uri.localeCompare(b.uri)),
+        documents: [...documents.values()].map((entry) => ({ uri: entry.uri, version: entry.version, source: entry.document.source, lastValidSource: entry.lastValid?.source ?? null })).sort((a, b) => a.uri.localeCompare(b.uri)),
       };
     },
-
     restore(snapshot) {
       validateRecoverySnapshot(snapshot);
       const rebuilt = new Map();
@@ -204,12 +184,7 @@ export function createDocumentStore() {
         let lastValid;
         if (item.lastValidSource != null) lastValid = parse(item.lastValidSource);
         const document = parseTolerant(item.source, lastValid);
-        rebuilt.set(item.uri, {
-          uri: item.uri,
-          version: item.version,
-          document,
-          lastValid: document.incomplete ? lastValid : document,
-        });
+        rebuilt.set(item.uri, { uri: item.uri, version: item.version, document, lastValid: document.incomplete ? lastValid : document });
       }
       documents.clear();
       for (const [uri, entry] of rebuilt) documents.set(uri, entry);
