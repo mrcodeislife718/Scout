@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTolerant } from '../src/recovery.js';
+import { parseTolerant, parseRecovering } from '../src/recovery.js';
 
 test('Scout tolerant parsing never treats non-JSON whitespace as valid', () => {
   const document = parseTolerant('{"a":1\u000b}');
@@ -14,6 +14,13 @@ test('Scout tolerant parsing preserves strict numeric overflow failure', () => {
   const document = parseTolerant('1e9999');
   assert.equal(document.incomplete, true);
   assert.ok(document.diagnostics.some((diagnostic) => /outside Scout numeric range/.test(diagnostic.message)));
+  assert.ok(document.diagnostics.every((diagnostic) => diagnostic.source === 'scout'));
+});
+
+test('Scout public recovery parser normalizes diagnostic identity', () => {
+  const document = parseRecovering('{"a" 1}');
+  assert.equal(document.incomplete, true);
+  assert.ok(document.diagnostics.length > 0);
   assert.ok(document.diagnostics.every((diagnostic) => diagnostic.source === 'scout'));
 });
 
