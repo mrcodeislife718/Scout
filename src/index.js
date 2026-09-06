@@ -40,3 +40,4 @@ export { encodeMessage, MessageReader, runStdioServer } from './lsp-stdio.js';
 export { ScoutSyntaxError, ScoutSyntaxError as JovaSyntaxError } from './errors.js';
 export { validate, validateSource, compileSchema, inferSchema, conformanceCase, runConformanceSuite, coreConformanceCases } from './schema.js';
 export { RecoveryStore, RecoveryCorruptionError } from './disaster-recovery.js';
+export { ScoutDocumentDisasterRecovery } from './document-disaster-recovery.js';
