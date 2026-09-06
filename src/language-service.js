@@ -2,7 +2,7 @@ import { parse } from './parser.js';
 import { parseTolerant } from './recovery.js';
 import { reparseIncremental } from './transaction.js';
 import { tokenAt } from './lossless.js';
-import { JovaSyntaxError } from './errors.js';
+import { ScoutSyntaxError } from './errors.js';
 
 function positionToOffset(source, position) {
   if (!position || !Number.isInteger(position.line) || !Number.isInteger(position.character)) throw new TypeError('Position must contain zero-based line and character');
@@ -53,9 +53,13 @@ export function validateText(source) {
     parse(source);
     return [];
   } catch (error) {
-    if (error instanceof JovaSyntaxError) return [syntaxErrorDiagnostic(source, error)];
+    if (error instanceof ScoutSyntaxError) return [syntaxErrorDiagnostic(source, error)];
     throw error;
   }
+}
+
+function nodeIdentity(node) {
+  return { scoutNodeId: node.id, jovaNodeId: node.id };
 }
 
 function symbolChildren(source, node) {
@@ -67,7 +71,7 @@ function symbolChildren(source, node) {
       range: nodeRange(source, member),
       selectionRange: { start: offsetToLspPosition(source, member.keyStart.offset), end: offsetToLspPosition(source, member.keyEnd.offset) },
       children: symbolChildren(source, member.value),
-      jovaNodeId: member.id,
+      ...nodeIdentity(member),
     }));
   }
   if (node.type === 'Array') {
@@ -77,7 +81,7 @@ function symbolChildren(source, node) {
       range: nodeRange(source, element),
       selectionRange: nodeRange(source, element.value),
       children: symbolChildren(source, element.value),
-      jovaNodeId: element.id,
+      ...nodeIdentity(element),
     }));
   }
   return [];
@@ -149,7 +153,7 @@ export function createDocumentStore() {
           reparseIncremental(entry.document, applied.edits);
           entry.lastValid = structuredClone(entry.document);
         } catch (error) {
-          if (!(error instanceof JovaSyntaxError)) throw error;
+          if (!(error instanceof ScoutSyntaxError)) throw error;
           entry.document = parseTolerant(applied.source, entry.lastValid ?? entry.document);
         }
       } else {
