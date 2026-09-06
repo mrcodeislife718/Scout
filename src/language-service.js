@@ -31,13 +31,13 @@ function syntaxErrorDiagnostic(source, error) {
   const offset = error?.position?.offset ?? 0;
   const start = offsetToLspPosition(source, offset);
   const end = offsetToLspPosition(source, Math.min(source.length, offset + 1));
-  return { severity: 1, source: 'jova', code: 'syntax', message: error.message, range: { start, end } };
+  return { severity: 1, source: 'scout', code: 'syntax', message: error.message, range: { start, end } };
 }
 
 function recoveryDiagnosticToLsp(source, item) {
   return {
     severity: item.severity ?? 1,
-    source: 'jova',
+    source: 'scout',
     code: item.code ?? 'incomplete-syntax',
     message: item.expected?.length ? `${item.message}. Expected: ${item.expected.join(', ')}` : item.message,
     range: {
@@ -84,12 +84,12 @@ function symbolChildren(source, node) {
 }
 
 export function documentSymbols(document) {
-  if (!document?.ast) throw new TypeError('Expected a JOVA document');
+  if (!document?.ast) throw new TypeError('Expected a Scout document');
   return symbolChildren(document.source, document.ast);
 }
 
 export function hoverAt(document, position) {
-  if (!document?.source) throw new TypeError('Expected a JOVA document');
+  if (!document?.source) throw new TypeError('Expected a Scout document');
   const offset = positionToOffset(document.source, position);
   const token = tokenAt(document, offset);
   if (!token || token.type === 'trivia' || token.type === 'eof') return undefined;
@@ -97,7 +97,7 @@ export function hoverAt(document, position) {
   if (token.type === 'comment') label = `${token.value.style} comment`;
   else if (token.type === 'literal') label = typeof token.value;
   return {
-    contents: { kind: 'markdown', value: `**JOVA ${label}**\n\n\`${token.raw}\`` },
+    contents: { kind: 'markdown', value: `**Scout ${label}**\n\n\`${token.raw}\`` },
     range: { start: offsetToLspPosition(document.source, token.start.offset), end: offsetToLspPosition(document.source, token.end.offset) },
   };
 }
@@ -116,6 +116,14 @@ function applyChangesToSource(source, changes) {
   return { source: next, edits };
 }
 
+function validateRecoverySnapshot(snapshot) {
+  if (snapshot?.schema !== 'scout.document-store/v1' || !Array.isArray(snapshot.documents)) throw new TypeError('invalid Scout document recovery snapshot');
+  for (const item of snapshot.documents) {
+    if (!item || typeof item.uri !== 'string' || typeof item.source !== 'string' || !Number.isInteger(item.version) || item.version < 0) throw new TypeError('invalid Scout document recovery entry');
+    if (item.lastValidSource != null && typeof item.lastValidSource !== 'string') throw new TypeError('invalid Scout last-valid recovery source');
+  }
+}
+
 export function createDocumentStore() {
   const documents = new Map();
 
@@ -132,7 +140,7 @@ export function createDocumentStore() {
 
     update(uri, changes, version) {
       const entry = documents.get(uri);
-      if (!entry) throw new RangeError(`JOVA document is not open: ${uri}`);
+      if (!entry) throw new RangeError(`Scout document is not open: ${uri}`);
       if (!Array.isArray(changes)) throw new TypeError('changes must be an array');
       const applied = applyChangesToSource(entry.document.source, changes);
 
@@ -171,6 +179,37 @@ export function createDocumentStore() {
     hover(uri, position) {
       const entry = documents.get(uri);
       return entry ? hoverAt(entry.document, position) : undefined;
+    },
+
+    snapshot() {
+      return {
+        schema: 'scout.document-store/v1',
+        documents: [...documents.values()].map((entry) => ({
+          uri: entry.uri,
+          version: entry.version,
+          source: entry.document.source,
+          lastValidSource: entry.lastValid?.source ?? null,
+        })).sort((a, b) => a.uri.localeCompare(b.uri)),
+      };
+    },
+
+    restore(snapshot) {
+      validateRecoverySnapshot(snapshot);
+      const rebuilt = new Map();
+      for (const item of snapshot.documents) {
+        let lastValid;
+        if (item.lastValidSource != null) lastValid = parse(item.lastValidSource);
+        const document = parseTolerant(item.source, lastValid);
+        rebuilt.set(item.uri, {
+          uri: item.uri,
+          version: item.version,
+          document,
+          lastValid: document.incomplete ? lastValid : document,
+        });
+      }
+      documents.clear();
+      for (const [uri, entry] of rebuilt) documents.set(uri, entry);
+      return this.snapshot();
     },
   };
 }
