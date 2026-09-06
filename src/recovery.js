@@ -1,5 +1,5 @@
 import { parse } from './parser.js';
-import { parseRecovering } from './recovery-parser.js';
+import { parseRecovering as parseRecoveringRaw } from './recovery-parser.js';
 import { reconcileSyntaxIdentity } from './identity.js';
 import { ScoutSyntaxError } from './errors.js';
 
@@ -26,7 +26,7 @@ function strictFailureDiagnostic(error) {
   };
 }
 
-function normalizeRecoveredDocument(recovered, strictError) {
+function normalizeRecoveredDocument(recovered, strictError = null) {
   recovered.diagnostics = (recovered.diagnostics ?? []).map((diagnostic) => ({ ...diagnostic, source: 'scout' }));
   if (strictError) {
     const strict = strictFailureDiagnostic(strictError);
@@ -37,6 +37,10 @@ function normalizeRecoveredDocument(recovered, strictError) {
   }
   recovered.incomplete = recovered.diagnostics.length > 0 || (recovered.recoveryNodes?.length ?? 0) > 0;
   return recovered;
+}
+
+export function parseRecovering(source, options = {}) {
+  return normalizeRecoveredDocument(parseRecoveringRaw(source, options));
 }
 
 export function parseTolerant(source, previousDocument) {
@@ -50,7 +54,7 @@ export function parseTolerant(source, previousDocument) {
     return document;
   } catch (error) {
     if (!(error instanceof ScoutSyntaxError)) throw error;
-    const recovered = normalizeRecoveredDocument(parseRecovering(source), error);
+    const recovered = normalizeRecoveredDocument(parseRecoveringRaw(source), error);
     return preservePreviousIdentity(previousDocument, recovered);
   }
 }
